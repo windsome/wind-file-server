@@ -1,0 +1,13 @@
+{
+  "name": "wind-file-server",
+  "version": "1.0.0",
+  "description": "wind-file-server API doc",
+  "title": "wind-file-server API",
+  "url" : "http://localhost:3000",
+  "sampleUrl": "http://localhost:3000",
+  "forceLanguage":"zh-cn",
+  "template": {
+    "withCompare": true,
+    "withGenerator": true
+  }
+}
