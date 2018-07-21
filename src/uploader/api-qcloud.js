@@ -3,12 +3,14 @@ const debug = _debug('app:api-qcloud');
 
 import getAuthorizationCos from './qcloud-cos';
 import getAuthorizationVod from './qcloud-vod';
+import Errcode, { EC, EM } from '../Errcode';
 
 export default class Uploader {
   constructor(app, config) {
     // save opts.
     this.app = app;
     this.config = config;
+    debug('init uploader! qcloud!');
 
     this.authCOS = this.authCOS.bind(this);
     this.authVOD = this.authVOD.bind(this);
@@ -31,8 +33,8 @@ export default class Uploader {
         } catch (e) {
           debug('error:', e);
           let errcode = e.errcode || -1;
-          //let message = ECCN[errcode] || '未知错误';
-          ctx.body = { errcode, message: e.message, xOrigMsg: e.message };
+          let message = EM[errcode] || e.message || '未知错误';
+          ctx.body = { errcode, message, xOrigMsg: e.message };
         }
         return;
       } else {

@@ -10,6 +10,7 @@ const mkdirp = require('mkdirp');
 const getRawBody = require('raw-body');
 const contentType = require('content-type');
 const crypto = require('crypto');
+import Errcode, { EC, EM } from '../Errcode';
 
 export default class Uploader {
   constructor(app) {
@@ -43,8 +44,8 @@ export default class Uploader {
         } catch (e) {
           debug('error:', e);
           let errcode = e.errcode || -1;
-          //let message = ECCN[errcode] || '未知错误';
-          ctx.body = { errcode, message: e.message, xOrigMsg: e.message };
+          let message = EM[errcode] || e.message || '未知错误';
+          ctx.body = { errcode, message, xOrigMsg: e.message };
         }
         return;
       } else {
@@ -139,7 +140,7 @@ export default class Uploader {
   async uploadForm(ctx, next) {
     // Validate Request
     if (!ctx.request.is('multipart/*')) {
-      return await next();
+      throw new Errcode('error! not multipart/*', EC.ERR_NOT_MULTPART);
     }
 
     // Parse request for multipart
@@ -194,7 +195,7 @@ export default class Uploader {
   async uploadChunked(ctx, next) {
     // Validate Request
     if (!ctx.request.is('multipart/*')) {
-      return await next();
+      throw new Errcode('error! not multipart/*', EC.ERR_NOT_MULTPART);
     }
     var message = '';
     var errcode = 0;
