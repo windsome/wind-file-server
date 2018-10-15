@@ -2,13 +2,13 @@ import _debug from 'debug';
 const debug = _debug('app:api-form');
 
 const parse = require('async-busboy');
-import Errcode, { EC } from '../Errcode';
+import Errcode, { EC, EM } from '../Errcode';
 import { _genFileName, _put } from './_utils';
 
 export default class Uploader {
-  constructor(router, cfg) {
+  constructor(app, cfg) {
     // save opts.
-    this.router = router;
+    this.app = app;
     this.cfg = cfg;
     this.uploads = cfg && cfg.folder;
 
@@ -17,7 +17,37 @@ export default class Uploader {
   }
 
   registerServices() {
-    this.router.post('/form', this.uploadForm);
+    let prefix = '/apis/v1/upload/form';
+    let router = require('koa-router')({ prefix });
+    router.post('/', this.uploadForm);
+
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        try {
+          // debug('path:', ctx.path, prefix);
+          let result = await next();
+        } catch (e) {
+          debug('error:', e);
+          let errcode = e.errcode || -1;
+          let message = EM[errcode] || e.message || '未知错误';
+          ctx.body = { errcode, message, xOrigMsg: e.message };
+        }
+        return;
+      } else {
+        await next();
+      }
+    });
+    this.app.use(router.routes()).use(router.allowedMethods());
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        ctx.body = {
+          errcode: -2,
+          message: 'no such api: ' + ctx.path
+        };
+        return;
+      }
+      await next();
+    });
   }
 
   /**

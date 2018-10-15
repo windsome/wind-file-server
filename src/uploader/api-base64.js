@@ -5,12 +5,13 @@ const path = require('path');
 const fs = require('fs');
 const getRawBody = require('raw-body');
 const contentType = require('content-type');
+import Errcode, { EC, EM } from '../Errcode';
 import { _genFileName } from './_utils';
 
 export default class Uploader {
-  constructor(router, cfg) {
+  constructor(app, cfg) {
     // save opts.
-    this.router = router;
+    this.app = app;
     this.cfg = cfg;
     this.uploads = cfg && cfg.folder;
 
@@ -19,8 +20,37 @@ export default class Uploader {
   }
 
   registerServices() {
-    //v2
-    this.router.post('/base64/:filename', this.uploadBase64);
+    let prefix = '/apis/v1/upload/base64';
+    let router = require('koa-router')({ prefix });
+    router.post('/:filename', this.uploadBase64);
+
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        try {
+          // debug('path:', ctx.path, prefix);
+          let result = await next();
+        } catch (e) {
+          debug('error:', e);
+          let errcode = e.errcode || -1;
+          let message = EM[errcode] || e.message || '未知错误';
+          ctx.body = { errcode, message, xOrigMsg: e.message };
+        }
+        return;
+      } else {
+        await next();
+      }
+    });
+    this.app.use(router.routes()).use(router.allowedMethods());
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        ctx.body = {
+          errcode: -2,
+          message: 'no such api: ' + ctx.path
+        };
+        return;
+      }
+      await next();
+    });
   }
 
   /**

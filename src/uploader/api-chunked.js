@@ -6,23 +6,57 @@ const path = require('path');
 const parse = require('async-busboy');
 const dateformat = require('dateformat');
 const fs = require('fs');
-import Errcode, { EC } from '../Errcode';
+const mkdirp = require('mkdirp');
+import Errcode, { EC, EM } from '../Errcode';
 import { _hash, _write } from './_utils';
 
 export default class Uploader {
-  constructor(router, cfg) {
+  constructor(app, cfg) {
     // save opts.
-    this.router = router;
+    this.app = app;
     this.cfg = cfg;
     this.uploads = cfg && cfg.folder;
+    this.tmps = this.uploads+'/tmp';
+    debug('init uploader! temps in ', this.tmps);
+    if (!fs.existsSync(this.tmps)) mkdirp.sync(this.tmps);
 
     this.registerServices();
   }
 
   registerServices() {
-    this.router.post('/chunked/start', this.start);
-    this.router.post('/chunked/upload', this.uploadChunked);
-    this.router.post('/chunked/end', this.end);
+    let prefix = '/apis/v1/upload/chunked';
+    let router = require('koa-router')({ prefix });
+    router.post('/start', this.start);
+    router.post('/upload', this.uploadChunked);
+    router.post('/end', this.end);
+
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        try {
+          // debug('path:', ctx.path, prefix);
+          let result = await next();
+        } catch (e) {
+          debug('error:', e);
+          let errcode = e.errcode || -1;
+          let message = EM[errcode] || e.message || '未知错误';
+          ctx.body = { errcode, message, xOrigMsg: e.message };
+        }
+        return;
+      } else {
+        await next();
+      }
+    });
+    this.app.use(router.routes()).use(router.allowedMethods());
+    this.app.use(async (ctx, next) => {
+      if (ctx.path.startsWith(prefix)) {
+        ctx.body = {
+          errcode: -2,
+          message: 'no such api: ' + ctx.path
+        };
+        return;
+      }
+      await next();
+    });
   }
 
   /**
@@ -157,7 +191,7 @@ export default class Uploader {
     // Parse request for multipart
     const { files, fields } = await parse(ctx.req);
 
-    debug('uploadChunked:', { fields, files });
+    // debug('uploadChunked:', { fields, files });
     let file = files[0];
 
     let cmd = fields.cmd;

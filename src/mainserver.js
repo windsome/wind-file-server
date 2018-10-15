@@ -63,20 +63,18 @@ if (!cfg.folder) {
 if (!fs.existsSync(cfg.folder)) mkdirp.sync(cfg.folder);
 debug('init uploader! uploads in ', cfg.folder);
 
+// static
 app.use(mount('/uploads', serve(cfg.folder)));
 
-// enter router......
-let prefix = '/apis/v1/upload/';
-let router = require('koa-router')({ prefix });
-
+// uploaders.
 let ApiBase64 = require('./uploader/api-base64').default;
-app.up_base64 = new ApiBase64(router);
+app.up_base64 = new ApiBase64(app, cfg);
 
 let ApiForm = require('./uploader/api-form').default;
-app.up_form = new ApiForm(router);
+app.up_form = new ApiForm(app, cfg);
 
 let ApiChunked = require('./uploader/api-chunked').default;
-app.up_chunked = new ApiChunked(router);
+app.up_chunked = new ApiChunked(app, cfg);
 
 // let ApiLocalServerV2 = require('./uploader/api-local-server.v2').default;
 // app.localServerV2 = new ApiLocalServerV2(router);
@@ -89,34 +87,6 @@ app.up_chunked = new ApiChunked(router);
 
 // let ApiAliyun = require('./uploader/api-aliyun.v2').default;
 // app.Aliyun = new ApiAliyun(router, cfg.aliyunVod);
-
-app.use(async (ctx, next) => {
-  if (ctx.path.startsWith(prefix)) {
-    try {
-      let result = await next();
-    } catch (e) {
-      debug('error:', e);
-      let errcode = e.errcode || -1;
-      let message = EM[errcode] || e.message || '未知错误';
-      ctx.body = { errcode, message, xOrigMsg: e.message };
-    }
-    return;
-  } else {
-    await next();
-  }
-});
-app.use(router.routes()).use(router.allowedMethods());
-app.use(async (ctx, next) => {
-  if (ctx.path.startsWith(prefix)) {
-    ctx.body = {
-      errcode: -2,
-      message: 'no such api: ' + ctx.path
-    };
-    return;
-  }
-  await next();
-});
-// exit router......
 
 app.use(function(ctx, next) {
   debug('not done! [' + ctx.req.method + '] ' + ctx.path, ctx.req.url);
