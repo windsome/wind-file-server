@@ -11,7 +11,6 @@
 npm install
 npm run build
 npm run tar
-scp bz2-server.tar.bz2 root@qingshansi:/data/nodejs/jtb-api-server/
 ```
 
 ## 用node直接运行
@@ -20,6 +19,18 @@ npm install
 npm run build
 node sdist
 ```
+
+## docker打包及运行
+1. 打包
+docker build . -t windsome/uploader:1.0.3
+docker push windsome/uploader:1.0.3
+2. 运行
+docker run -p 11717:11717 windsome/uploader:1.0.3
+3. 映射卷到docker内部.
+docker run -p 11717:11717 -v /home/data/uploads:/home/data/uploads windsome/uploader:1.0.3
+
+## 用k8s运行
+kubectl apply -f https://raw.githubusercontent.com/windsome/wind-file-server/master/uploader.svc.deploy.yaml
 
 ## 用apidoc生成接口文档
 ```

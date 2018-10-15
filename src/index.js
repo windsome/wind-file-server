@@ -8,7 +8,7 @@ var server = require('./mainserver').default;
 var _debug = require('debug');
 const debug = _debug('app:server');
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 11717;
 
 http.createServer(server.callback()).listen(port);
 debug(`Server accessible via http://localhost:${port} `);

@@ -7,7 +7,7 @@ const debug = _debug('app:config');
 // Default Configuration
 // ========================================================
 const config = {
-  server_port: 3000,
+  server_port: 11717,
   server_port_https: 3001,
   // ----------------------------------
   // Https Configuration
