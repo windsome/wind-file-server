@@ -34,6 +34,5 @@ const config = {
   }
 };
 
-//export default config;
-let nextcfg = require('./cfg.windsome').default(config);
-export default nextcfg;
+// config = require('./cfg.windsome').default(config);
+export default config;
