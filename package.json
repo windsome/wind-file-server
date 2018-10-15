@@ -8,6 +8,8 @@
     "errcode": "^0.1.4",
     "fs-extra": "^5.0.0",
     "isomorphic-fetch": "^2.2.1",
+    "koa-mount": "^4.0.0",
+    "koa-static": "^5.0.0",
     "koa2-cors": "^2.0.5",
     "lodash": "^4.17.4",
     "moment": "^2.18.1"

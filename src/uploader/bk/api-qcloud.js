@@ -69,10 +69,7 @@ export default class Uploader {
     // debug('ctx2:', ctx.request.query);
     // debug('ctx3:', ctx.request.header);
 
-    let {
-      secretId,
-      secretKey
-    } = this.config;
+    let { secretId, secretKey } = this.config;
     let options = { ...ctx.request.query, headers: ctx.request.header };
     let authorization = getAuthorizationCos(secretId, secretKey, options);
     debug('authorization cos:', authorization);
@@ -88,10 +85,7 @@ export default class Uploader {
    * @apiError errcode!=0 error occurs.
    */
   async authVOD(ctx, next) {
-    let {
-      secretId,
-      secretKey
-    } = this.config;
+    let { secretId, secretKey } = this.config;
     let authorization = getAuthorizationVod(secretId, secretKey);
     debug('authorization vod:', authorization);
     ctx.body = { authorization, errcode: 0 };

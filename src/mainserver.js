@@ -4,13 +4,12 @@ import 'isomorphic-fetch';
 import Koa from 'koa';
 import convert from 'koa-convert';
 import cors from 'koa2-cors';
-import parseUserAgent from './utils/userAgent';
-import cfg from './cfg';
-
-import ApiLocalServerV2 from './uploader/api-local-server.v2';
-import ApiLocalServerV3 from './uploader/api-local-server.v3';
-import ApiQcloud from './uploader/api-qcloud';
-import ApiAliyun from './uploader/api-aliyun.v2';
+// import cfg from './cfg';
+import Errcode, { EC, EM } from './Errcode';
+const fs = require('fs');
+const mkdirp = require('mkdirp');
+import serve from 'koa-static';
+import mount from 'koa-mount';
 
 let packageJson = require('../package.json');
 debug('SOFTWARE VERSION:', packageJson.name, packageJson.version);
@@ -48,22 +47,76 @@ app.use(async (ctx, next) => {
     body: ctx.request.body,
     referer: ctx.req.headers.referer,
     // Authorization: ctx.request.header && ctx.request.header['Authorization'],
-    parsedAgent: parseUserAgent(
-      ctx.request.header && ctx.request.header['user-agent']
-    )
     // header: ctx.request.header
   };
   debug('[' + ctx.method + '] ' + ctx.path, dbginfo);
   await next();
 });
 
-//let json = require('koa-json'); // response json body.
-//app.use(convert(json()));
+let cfg = {
+  folder: '/home/data/uploads'
+};
+if (!cfg.folder) {
+  debug('error! cfg.folder is null!');
+  process.exit(-1);
+}
+if (!fs.existsSync(cfg.folder)) mkdirp.sync(cfg.folder);
+debug('init uploader! uploads in ', cfg.folder);
 
-app.localServerV2 = new ApiLocalServerV2(app);
-app.localServerV3 = new ApiLocalServerV3(app);
-app.Qcloud = new ApiQcloud(app, cfg.qcloud);
-app.Aliyun = new ApiAliyun(app, cfg.aliyunVod);
+app.use(mount('/uploads', serve(cfg.folder)));
+
+// enter router......
+let prefix = '/apis/v1/upload/';
+let router = require('koa-router')({ prefix });
+
+let ApiBase64 = require('./uploader/api-base64').default;
+app.up_base64 = new ApiBase64(router);
+
+let ApiForm = require('./uploader/api-form').default;
+app.up_form = new ApiForm(router);
+
+let ApiChunked = require('./uploader/api-chunked').default;
+app.up_chunked = new ApiChunked(router);
+
+// let ApiLocalServerV2 = require('./uploader/api-local-server.v2').default;
+// app.localServerV2 = new ApiLocalServerV2(router);
+
+// let ApiLocalServerV3 = require('./uploader/api-local-server.v3').default;
+// app.localServerV3 = new ApiLocalServerV3(router);
+
+// let ApiQcloud = require('./uploader/api-qcloud').default;
+// app.Qcloud = new ApiQcloud(router, cfg.qcloud);
+
+// let ApiAliyun = require('./uploader/api-aliyun.v2').default;
+// app.Aliyun = new ApiAliyun(router, cfg.aliyunVod);
+
+app.use(async (ctx, next) => {
+  if (ctx.path.startsWith(prefix)) {
+    try {
+      let result = await next();
+    } catch (e) {
+      debug('error:', e);
+      let errcode = e.errcode || -1;
+      let message = EM[errcode] || e.message || '未知错误';
+      ctx.body = { errcode, message, xOrigMsg: e.message };
+    }
+    return;
+  } else {
+    await next();
+  }
+});
+app.use(router.routes()).use(router.allowedMethods());
+app.use(async (ctx, next) => {
+  if (ctx.path.startsWith(prefix)) {
+    ctx.body = {
+      errcode: -2,
+      message: 'no such api: ' + ctx.path
+    };
+    return;
+  }
+  await next();
+});
+// exit router......
 
 app.use(function(ctx, next) {
   debug('not done! [' + ctx.req.method + '] ' + ctx.path, ctx.req.url);
