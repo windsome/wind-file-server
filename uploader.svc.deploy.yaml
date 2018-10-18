@@ -35,7 +35,7 @@ spec:
       name: uploader
     spec:
       containers:
-      - image: windsome/uploader:1.0.3
+      - image: windsome/uploader
         name: uploader
         volumeMounts:
         - mountPath: /home/data/uploads
