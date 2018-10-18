@@ -10,6 +10,7 @@ const fs = require('fs');
 const mkdirp = require('mkdirp');
 import serve from 'koa-static';
 import mount from 'koa-mount';
+var staticCache = require('koa-static-cache')
 
 let packageJson = require('../package.json');
 debug('SOFTWARE VERSION:', packageJson.name, packageJson.version);
@@ -64,7 +65,19 @@ if (!fs.existsSync(cfg.folder)) mkdirp.sync(cfg.folder);
 debug('init uploader! uploads in ', cfg.folder);
 
 // static
-app.use(mount('/uploads', serve(cfg.folder)));
+// app.use(mount('/uploads', serve(cfg.folder)));
+
+let LRU = require('lru-cache');
+let files = new LRU({ max: 1000 });
+app.use(
+  staticCache(cfg.folder, {
+    maxAge: 365 * 24 * 60 * 60,
+    prefix: '/uploads',
+    gzip: true,
+    dynamic: true,
+    files: files
+  })
+);
 
 // uploaders.
 let ApiBase64 = require('./uploader/api-base64').default;
