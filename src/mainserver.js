@@ -73,7 +73,7 @@ app.use(
   staticCache(cfg.folder, {
     maxAge: 365 * 24 * 60 * 60,
     prefix: '/uploads',
-    gzip: true,
+    // gzip: true,
     dynamic: true,
     files: files
   })
