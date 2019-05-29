@@ -10,7 +10,7 @@ const fs = require('fs');
 const mkdirp = require('mkdirp');
 import serve from 'koa-static';
 import mount from 'koa-mount';
-var staticCache = require('koa-static-cache')
+var staticCache = require('koa-static-cache');
 
 let packageJson = require('../package.json');
 debug('SOFTWARE VERSION:', packageJson.name, packageJson.version);
@@ -46,7 +46,7 @@ app.use(async (ctx, next) => {
       (ctx.request.header && ctx.request.header['X-Real-IP']) || ctx.request.ip,
     query: ctx.request.query,
     body: ctx.request.body,
-    referer: ctx.req.headers.referer,
+    referer: ctx.req.headers.referer
     // Authorization: ctx.request.header && ctx.request.header['Authorization'],
     // header: ctx.request.header
   };
@@ -88,6 +88,9 @@ app.up_form = new ApiForm(app, cfg);
 
 let ApiChunked = require('./uploader/api-chunked').default;
 app.up_chunked = new ApiChunked(app, cfg);
+
+let ApiUrl = require('./uploader/api-url').default;
+app.up_url = new ApiUrl(app, cfg);
 
 // let ApiLocalServerV2 = require('./uploader/api-local-server.v2').default;
 // app.localServerV2 = new ApiLocalServerV2(router);

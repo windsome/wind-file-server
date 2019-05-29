@@ -7,12 +7,14 @@ const dateformat = require('dateformat');
 const fs = require('fs');
 const mkdirp = require('mkdirp');
 const crypto = require('crypto');
+const http = require('http');
+const request = require('request');
 
 export const _hash = filepath => {
   return new Promise((resolve, reject) => {
-    var start = new Date().getTime();
-    var md5sum = crypto.createHash('md5');
-    var stream = fs.createReadStream(filepath);
+    let start = new Date().getTime();
+    let md5sum = crypto.createHash('md5');
+    let stream = fs.createReadStream(filepath);
     stream.on('data', function(chunk) {
       md5sum.update(chunk);
     });
@@ -20,7 +22,7 @@ export const _hash = filepath => {
       reject(false);
     });
     stream.on('end', () => {
-      var str = md5sum.digest('hex').toUpperCase();
+      let str = md5sum.digest('hex').toUpperCase();
       console.log(
         '文件:' +
           filepath +
@@ -71,7 +73,7 @@ export const _put = (folder, filename, file) => {
 };
 
 export const _genFileName = filename => {
-  var destfile = `${path.basename(
+  let destfile = `${path.basename(
     filename,
     path.extname(filename)
   )}.${dateformat(new Date(), 'yyyymmddHHMMss')}-${uuid.v4()}${path.extname(
@@ -79,3 +81,50 @@ export const _genFileName = filename => {
   )}`;
   return destfile;
 };
+
+export const findFile = (path, partname) => {
+  let dirList = fs.readdirSync(path);
+  for (let i = 0; i < dirList.length; i++) {
+    let item = dirList[i];
+    if (item.indexOf(partname) >= 0) {
+      // find the file.
+      return item;
+    }
+  }
+  return null;
+};
+
+export function downloadFile(sourceUrl, targetPath) {
+  return new Promise((resolve, reject) => {
+    let writeStream = fs.createWriteStream(targetPath);
+    let readStream = request(sourceUrl);
+    readStream.pipe(writeStream);
+    readStream.on('error', err => {
+      writeStream.end();
+      reject(err);
+    });
+
+    readStream.on('end', () => {
+      writeStream.end();
+      resolve(true);
+    });
+  });
+}
+
+export function downloadFile2(sourceUrl, targetPath) {
+  return new Promise((resolve, reject) => {
+    http.get(sourceUrl, res => {
+      let fileData = '';
+      res.setEncoding('binary');
+      res.on('data', function(chunk) {
+        fileData += chunk;
+      });
+      res.on('end', function() {
+        fs.writeFile(targetPath, fileData, 'binary', function(err) {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
+    });
+  });
+}

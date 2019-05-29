@@ -1,14 +1,13 @@
 import _debug from 'debug';
 const debug = _debug('app:api-chunked');
 
-const uuid = require('uuid');
 const path = require('path');
 const parse = require('async-busboy');
-const dateformat = require('dateformat');
 const fs = require('fs');
 const mkdirp = require('mkdirp');
 import Errcode, { EC, EM } from '../Errcode';
-import { _hash, _write } from './_utils';
+import { _hash, _write, findFile } from './_utils';
+import { beautifyFilename, fieldDatetime } from './_filename';
 
 export default class Uploader {
   constructor(app, cfg) {
@@ -16,7 +15,7 @@ export default class Uploader {
     this.app = app;
     this.cfg = cfg;
     this.uploads = cfg && cfg.folder;
-    this.tmps = this.uploads+'/tmp';
+    this.tmps = this.uploads + '/tmp';
     debug('init uploader! temps in ', this.tmps);
     if (!fs.existsSync(this.tmps)) mkdirp.sync(this.tmps);
 
@@ -69,19 +68,25 @@ export default class Uploader {
    * @apiVersion 1.0.0
    * @apiParamExample {json} 请求参数:
    * {
-   *  cmd:"start"  // 命令名称
    *  name:"test.jpg" // 文件名称.
    *  size:12352  // 文件大小.
-   *  hash:"xxxxxxx" // 文件hash值.
+   *  hash:"xxxxxxx" // 文件hash值.如果不填则不检查文件hash是否存在.
    * }
-   * @apiSuccessExample {json} 成功响应:
+   * @apiSuccessExample {json} 已上传过的文件,直接返回url:
    * HTTP/1.1 200 OK
    * {
    *  errcode: 0,
    *  message: 'ok',
-   *  status:'ready/finish', // 状态. finish表示已经上传过,ready表示等待上传.
-   *  destname, // 上传后文件名称
+   *  status:'finish', // 状态. finish表示已经上传过,ready表示等待上传.
    *  url: '/uploads/' + destname // 上传后文件链接地址
+   * }
+   * @apiSuccessExample {json} 未上传过,已准备好接收数据开始上传:
+   * HTTP/1.1 200 OK
+   * {
+   *  errcode: 0,
+   *  message: 'ok',
+   *  status:'ready', // 状态. finish表示已经上传过,ready表示等待上传.
+   *  destname, // 上传时的中间文件名称,会放在/uploads/tmp目录,上传完成后在文件名中添加hash并移动到/uploads目录.
    * }
    * @apiErrorExample {json} 错误例子:
    * {
@@ -98,53 +103,38 @@ export default class Uploader {
     // Parse request for multipart
     const { files, fields } = await parse(ctx.req);
 
-    let cmd = fields.cmd;
+    // let cmd = fields.cmd;
     let name = fields.name;
     let size = parseInt(fields.size) || 0;
-    let hash = fields.hash;
-    let defName = dateformat(new Date(), 'yyyymmddHHMMss') + '_' + uuid.v4();
-
-    let nName =
-      (name &&
-        name.replace(
-          /(\/)|(\\)|(\*)|(\ )|(\')|(\")|(\:)|(\&)|(\n)|(\r)|(\t)|(\f)|(\[)|(\])|(\{)|(\})|(\()|(\))/g,
-          '_'
-        )) ||
-      '';
-    let destname = (hash || defName) + '.' + size + '.' + nName;
-
-    let isFinish = false;
-    let isUploading = false;
-
-    const destpath = path.join(this.uploads, destname);
-    if (fs.existsSync(destpath)) {
-      isFinish = true;
+    let hash = fields.hash || '';
+    if (hash.length >= 16) {
+      // 哈希值大于16个字节,我们认为其有效.
+      // 去查找是否存在相同哈希及相同大小的文件
+      // 如果存在,则返回此文件,不再上传.
+      let findfile = findFile(this.uploads, hash + '.' + size);
+      if (findfile) {
+        // 找到文件.
+        ctx.status = 200;
+        ctx.body = {
+          errcode,
+          status: 'finish',
+          message: 'ok',
+          url: '/uploads/' + findfile
+        };
+        return;
+      }
     }
-    const temppath = path.join(this.tmps, destname);
-    if (fs.existsSync(temppath)) {
-      isUploading = true;
-    }
-    let status = '';
-    if (isFinish) status = 'finish';
-    else status = 'ready';
 
-    debug('upload start:', {
-      cmd,
-      name,
-      size,
-      hash,
-      nName,
-      destname,
-      isFinish,
-      isUploading
-    });
+    let basename = beautifyFilename(name).slice(-11);
+    let intername = fieldDatetime() + '.' + size + '.' + basename; // 中间文件名字.
+
     ctx.status = 200;
     ctx.body = {
       errcode: 0,
       message: 'ok',
-      status,
-      destname,
-      url: '/uploads/' + destname
+      status: 'ready',
+      destname: intername
+      // url: '/uploads/' + destname
     };
     return;
   };
@@ -157,13 +147,13 @@ export default class Uploader {
    * @apiVersion 1.0.0
    * @apiParamExample {json} 请求参数:
    * {
-   *  cmd:"upload"  // 命令名称
-   *  name:"test.jpg" // 文件名称.
-   *  size:1235234534  // 文件大小.
-   *  hash:"xxxxxxx" // 文件hash值.
-   *  destname:"xxxxxxtest.jpg" // 服务器端文件名称,由start命令返回.
+   *  //cmd:"upload"  // 命令名称
+   *  //name:"test.jpg" // 文件名称.
+   *  //size:1235234534  // 文件大小.
+   *  //hash:"xxxxxxx" // 文件hash值.
+   *  destname:"xxxxxxtest.jpg" // 必须,服务器端中间文件名称,由start命令返回.在/uploads/tmp/下
    *  start:0 // 当前块在文件中的开始位置.
-   *  end:11562323 // 当前块在文件中的结束位置
+   *  //end:11562323 // 当前块在文件中的结束位置,可直接用buffer长度替换此end位置.
    * }
    * @apiSuccessExample {json} 成功响应:
    * HTTP/1.1 200 OK
@@ -171,8 +161,8 @@ export default class Uploader {
    *  errcode: 0,
    *  message: 'ok',
    *  destname, // 上传后文件名称
-   *  url: '/uploads/' + destname // 上传后文件链接地址
-   *  tmp: '/uploads/tmps/' + destname,
+   *  //url: '/uploads/' + destname // 上传后文件链接地址
+   *  //tmp: '/uploads/tmps/' + destname,
    * }
    * @apiErrorExample {json} 错误例子:
    * {
@@ -185,8 +175,6 @@ export default class Uploader {
     if (!ctx.request.is('multipart/*')) {
       throw new Errcode('error! not multipart/*', EC.ERR_NOT_MULTPART);
     }
-    let message = '';
-    let errcode = 0;
 
     // Parse request for multipart
     const { files, fields } = await parse(ctx.req);
@@ -194,15 +182,15 @@ export default class Uploader {
     // debug('uploadChunked:', { fields, files });
     let file = files[0];
 
-    let cmd = fields.cmd;
-    let name = fields.name;
-    let destname = fields.destname;
-    let size = parseInt(fields.size) || 0;
-    let hash = fields.hash;
+    // let cmd = fields.cmd;
+    // let name = fields.name;
+    // let size = parseInt(fields.size) || 0;
+    // let hash = fields.hash;
+    let intername = fields.destname;
     let start = parseInt(fields.start) || 0;
-    let end = parseInt(fields.end) || 0;
+    // let end = parseInt(fields.end) || 0;
 
-    const filepath = path.join(this.tmps, destname);
+    const filepath = path.join(this.tmps, intername);
     let flags = 'r+';
     if (!fs.existsSync(filepath)) {
       flags = 'w+';
@@ -210,14 +198,14 @@ export default class Uploader {
     }
     let serverfile = await _write(filepath, file, start, flags);
     //ctx.res.setHeader("Content-Type", "application/json")
-    message = 'ok';
+    // message = 'ok';
     ctx.status = 200;
     ctx.body = {
-      errcode,
-      message,
-      destname,
-      url: '/uploads/' + destname,
-      tmp: '/uploads/tmps/' + destname
+      errcode: 0,
+      message: 'ok',
+      destname: intername
+      // url: '/uploads/' + destname,
+      // tmp: '/uploads/tmps/' + destname
     };
     return;
   };
@@ -230,18 +218,18 @@ export default class Uploader {
    * @apiVersion 1.0.0
    * @apiParamExample {json} 请求参数:
    * {
-   *  cmd:"end"  // 命令名称
+   *  //cmd:"end"  // 命令名称
    *  name:"test.jpg" // 文件名称.
    *  size:1235234534  // 文件大小.
    *  hash:"xxxxxxx" // 文件hash值.
-   *  destname:"xxxxxxtest.jpg" // 服务器端文件名称,由start命令返回.
+   *  destname:"xxxxxxtest.jpg" // 服务器端中间文件名称,由start命令返回.在/uploads/tmp下
    * }
    * @apiSuccessExample {json} 成功响应:
    * HTTP/1.1 200 OK
    * {
    *  errcode: 0,
    *  message: 'ok',
-   *  url: '/uploads/' + destname // 上传后文件链接地址
+   *  url: '/uploads/' + destname // 上传后文件最终链接地址,
    * }
    * @apiErrorExample {json} 错误例子:
    * {
@@ -254,38 +242,37 @@ export default class Uploader {
     if (!ctx.request.is('multipart/*')) {
       throw new Errcode('error! not multipart/*', EC.ERR_NOT_MULTPART);
     }
-    let message = '';
-    let errcode = 0;
-
     // Parse request for multipart
     const { files, fields } = await parse(ctx.req);
 
-    let file = files[0];
-
-    let cmd = fields.cmd;
+    // let file = files[0];
+    // let cmd = fields.cmd;
     let name = fields.name;
-    let destname = fields.destname;
+    let intername = fields.destname;
     let size = parseInt(fields.size) || 0;
     let hash = fields.hash;
 
-    const filepath = path.join(this.tmps, destname);
-    message = 'ok';
+    const filepath = path.join(this.tmps, intername);
+    let hash2 = await _hash(filepath);
     let notCheckHash = !hash || hash === 'null' || hash === 'none';
     if (!notCheckHash) {
-      let hash2 = await _hash(filepath);
       if (hash != hash2) {
         debug('error! hash mismatch! delete? hash=' + hash + ',cal=' + hash2);
         throw new Error('hash mismatch!');
       }
     }
+
+    let basename = beautifyFilename(name).slice(-11);
+    let destname = hash2 + '.' + size + '.' + basename; // 中间文件名字.
+
     fs.renameSync(
-      path.join(this.tmps, destname),
+      path.join(this.tmps, intername),
       path.join(this.uploads, destname)
     );
     ctx.status = 200;
     ctx.body = {
-      errcode,
-      message,
+      errcode: 0,
+      message: 'ok',
       url: '/uploads/' + destname
     };
     return;
