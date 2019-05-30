@@ -92,6 +92,9 @@ app.up_chunked = new ApiChunked(app, cfg);
 let ApiUrl = require('./uploader/api-url').default;
 app.up_url = new ApiUrl(app, cfg);
 
+let ApiProxy = require('./uploader/api-proxy').default;
+app.up_proxy = new ApiProxy(app, cfg);
+
 // let ApiLocalServerV2 = require('./uploader/api-local-server.v2').default;
 // app.localServerV2 = new ApiLocalServerV2(router);
 
