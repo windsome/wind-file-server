@@ -116,7 +116,7 @@ export default class Uploader {
         // 找到文件.
         ctx.status = 200;
         ctx.body = {
-          errcode,
+          errcode: 0,
           status: 'finish',
           message: 'ok',
           url: '/uploads/' + findfile
